@@ -820,6 +820,7 @@ void evalGenericCommand(redisClient *c, int evalsha) {
     char funcname[43];
     long long numkeys;
     int delhook = 0, err;
+    aclC(c);
 
     /* We want the same PRNG sequence at every call so that our PRNG is
      * not affected by external state. */
@@ -1022,6 +1023,7 @@ int redis_math_randomseed (lua_State *L) {
  * ------------------------------------------------------------------------- */
 
 void scriptCommand(redisClient *c) {
+    aclC(c);
     if (c->argc == 2 && !strcasecmp(c->argv[1]->ptr,"flush")) {
         scriptingReset();
         addReply(c,shared.ok);

@@ -128,6 +128,7 @@ void slowlogReset(void) {
 /* The SLOWLOG command. Implements all the subcommands needed to handle the
  * Redis slow log. */
 void slowlogCommand(redisClient *c) {
+    aclC(c);
     if (c->argc == 2 && !strcasecmp(c->argv[1]->ptr,"reset")) {
         slowlogReset();
         addReply(c,shared.ok);

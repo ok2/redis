@@ -296,6 +296,7 @@ void listTypeConvert(robj *subject, int enc) {
 
 void pushGenericCommand(redisClient *c, int where) {
     int j, waiting = 0, pushed = 0;
+    aclW1(c);
     robj *lobj = lookupKeyWrite(c->db,c->argv[1]);
     int may_have_waiting_clients = (lobj == NULL);
 
@@ -338,6 +339,7 @@ void pushxGenericCommand(redisClient *c, robj *refval, robj *val, int where) {
     listTypeIterator *iter;
     listTypeEntry entry;
     int inserted = 0;
+    aclW1(c);
 
     if ((subject = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
         checkType(c,subject,REDIS_LIST)) return;
@@ -409,12 +411,14 @@ void linsertCommand(redisClient *c) {
 }
 
 void llenCommand(redisClient *c) {
+    aclR1(c);
     robj *o = lookupKeyReadOrReply(c,c->argv[1],shared.czero);
     if (o == NULL || checkType(c,o,REDIS_LIST)) return;
     addReplyLongLong(c,listTypeLength(o));
 }
 
 void lindexCommand(redisClient *c) {
+    aclR1(c);
     robj *o = lookupKeyReadOrReply(c,c->argv[1],shared.nullbulk);
     if (o == NULL || checkType(c,o,REDIS_LIST)) return;
     long index;
@@ -454,6 +458,7 @@ void lindexCommand(redisClient *c) {
 }
 
 void lsetCommand(redisClient *c) {
+    aclW1(c);
     robj *o = lookupKeyWriteOrReply(c,c->argv[1],shared.nokeyerr);
     if (o == NULL || checkType(c,o,REDIS_LIST)) return;
     long index;
@@ -497,6 +502,7 @@ void lsetCommand(redisClient *c) {
 }
 
 void popGenericCommand(redisClient *c, int where) {
+    aclRW1(c);
     robj *o = lookupKeyWriteOrReply(c,c->argv[1],shared.nullbulk);
     if (o == NULL || checkType(c,o,REDIS_LIST)) return;
 
@@ -530,6 +536,7 @@ void rpopCommand(redisClient *c) {
 void lrangeCommand(redisClient *c) {
     robj *o;
     long start, end, llen, rangelen;
+    aclR1(c);
 
     if ((getLongFromObjectOrReply(c, c->argv[2], &start, NULL) != REDIS_OK) ||
         (getLongFromObjectOrReply(c, c->argv[3], &end, NULL) != REDIS_OK)) return;
@@ -591,6 +598,7 @@ void ltrimCommand(redisClient *c) {
     long start, end, llen, j, ltrim, rtrim;
     list *list;
     listNode *ln;
+    aclW1(c);
 
     if ((getLongFromObjectOrReply(c, c->argv[2], &start, NULL) != REDIS_OK) ||
         (getLongFromObjectOrReply(c, c->argv[3], &end, NULL) != REDIS_OK)) return;
@@ -650,6 +658,7 @@ void lremCommand(redisClient *c) {
     long toremove;
     long removed = 0;
     listTypeEntry entry;
+    aclW1(c);
 
     if ((getLongFromObjectOrReply(c, c->argv[2], &toremove, NULL) != REDIS_OK))
         return;
@@ -720,6 +729,9 @@ void rpoplpushHandlePush(redisClient *c, robj *dstkey, robj *dstobj, robj *value
 
 void rpoplpushCommand(redisClient *c) {
     robj *sobj, *value;
+    aclRW1(c);
+    aclWn(c, 2);
+
     if ((sobj = lookupKeyWriteOrReply(c,c->argv[1],shared.nullbulk)) == NULL ||
         checkType(c,sobj,REDIS_LIST)) return;
 
@@ -1059,6 +1071,8 @@ void blockingPopGenericCommand(redisClient *c, int where) {
     robj *o;
     time_t timeout;
     int j;
+    for (j = 1; j < c->argc-1; j++)
+      aclWn(c, j);
 
     if (getTimeoutFromObjectOrReply(c,c->argv[c->argc-1],&timeout) != REDIS_OK)
         return;
@@ -1121,6 +1135,7 @@ void brpopCommand(redisClient *c) {
 
 void brpoplpushCommand(redisClient *c) {
     time_t timeout;
+    aclW1(c);
 
     if (getTimeoutFromObjectOrReply(c,c->argv[3],&timeout) != REDIS_OK)
         return;

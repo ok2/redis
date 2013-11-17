@@ -196,6 +196,7 @@ void sortCommand(redisClient *c) {
     int int_convertion_error = 0;
     robj *sortval, *sortby = NULL, *storekey = NULL;
     redisSortObject *vector; /* Resulting vector to sort */
+    aclR1(c);
 
     /* Lookup the key to sort. It must be of the right types */
     sortval = lookupKeyRead(c->db,c->argv[1]);
@@ -255,6 +256,13 @@ void sortCommand(redisClient *c) {
             return;
         }
         j++;
+    }
+
+    if (storekey != NULL && aclFn(c, storekey->ptr, 0, 1, 0)) {
+      decrRefCount(sortval);
+      listRelease(operations);
+      addReply(c, shared.notallowed);
+      return;
     }
 
     /* For the STORE option, or when SORT is called from a Lua script,

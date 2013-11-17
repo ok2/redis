@@ -28,6 +28,7 @@
  */
 
 #include "redis.h"
+#include "sha1.h"
 #include <math.h> /* isnan(), isinf() */
 
 /*-----------------------------------------------------------------------------
@@ -74,6 +75,7 @@ void setGenericCommand(redisClient *c, int flags, robj *key, robj *val, robj *ex
         }
         if (unit == UNIT_SECONDS) milliseconds *= 1000;
     }
+    aclW1(c);
 
     if ((flags & REDIS_SET_NX && lookupKeyWrite(c->db,key) != NULL) ||
         (flags & REDIS_SET_XX && lookupKeyWrite(c->db,key) == NULL))
@@ -127,6 +129,25 @@ void setCommand(redisClient *c) {
     setGenericCommand(c,flags,c->argv[1],c->argv[2],expire,unit,NULL,NULL);
 }
 
+void setshaCommand(redisClient *c) {
+  sds prevdata = c->argv[2]->ptr;
+  SHA1_CTX ctx;
+  unsigned char sha[20];
+  sds data = sdsnew("                                        ");
+  int i;
+
+  SHA1Init(&ctx);
+  SHA1Update(&ctx, (unsigned char*) prevdata, sdslen(prevdata));
+  SHA1Final(sha, &ctx);
+  for (i = 0; i < 20; ++i)
+    sprintf(&(((char*)data)[i*2]), "%02x", sha[i]);
+
+  sdsfree(prevdata);
+  c->argv[2]->ptr = data;
+  setCommand(c);
+  sdsfree(data);
+}
+
 void setnxCommand(redisClient *c) {
     c->argv[2] = tryObjectEncoding(c->argv[2]);
     setGenericCommand(c,REDIS_SET_NX,c->argv[1],c->argv[2],NULL,0,shared.cone,shared.czero);
@@ -158,10 +179,12 @@ int getGenericCommand(redisClient *c) {
 }
 
 void getCommand(redisClient *c) {
+    aclR1(c);
     getGenericCommand(c);
 }
 
 void getsetCommand(redisClient *c) {
+    aclRW1(c);
     if (getGenericCommand(c) == REDIS_ERR) return;
     c->argv[2] = tryObjectEncoding(c->argv[2]);
     setKey(c->db,c->argv[1],c->argv[2]);
@@ -173,6 +196,7 @@ void setrangeCommand(redisClient *c) {
     robj *o;
     long offset;
     sds value = c->argv[3]->ptr;
+    aclW1(c);
 
     if (getLongFromObjectOrReply(c,c->argv[2],&offset,NULL) != REDIS_OK)
         return;
@@ -239,6 +263,7 @@ void getrangeCommand(redisClient *c) {
     long start, end;
     char *str, llbuf[32];
     size_t strlen;
+    aclR1(c);
 
     if (getLongFromObjectOrReply(c,c->argv[2],&start,NULL) != REDIS_OK)
         return;
@@ -274,6 +299,9 @@ void getrangeCommand(redisClient *c) {
 void mgetCommand(redisClient *c) {
     int j;
 
+    for (j = 1; j < c->argc; j++)
+      aclRn(c, j);
+
     addReplyMultiBulkLen(c,c->argc-1);
     for (j = 1; j < c->argc; j++) {
         robj *o = lookupKeyRead(c->db,c->argv[j]);
@@ -296,6 +324,8 @@ void msetGenericCommand(redisClient *c, int nx) {
         addReplyError(c,"wrong number of arguments for MSET");
         return;
     }
+    for (j = 1; j < c->argc; j += 2)
+      aclWn(c, j);
     /* Handle the NX flag. The MSETNX semantic is to return zero and don't
      * set nothing at all if at least one already key exists. */
     if (nx) {
@@ -330,6 +360,7 @@ void msetnxCommand(redisClient *c) {
 void incrDecrCommand(redisClient *c, long long incr) {
     long long value, oldvalue;
     robj *o, *new;
+    aclW1(c);
 
     o = lookupKeyWrite(c->db,c->argv[1]);
     if (o != NULL && checkType(c,o,REDIS_STRING)) return;
@@ -414,6 +445,7 @@ void incrbyfloatCommand(redisClient *c) {
 void appendCommand(redisClient *c) {
     size_t totlen;
     robj *o, *append;
+    aclW1(c);
 
     o = lookupKeyWrite(c->db,c->argv[1]);
     if (o == NULL) {
@@ -453,6 +485,7 @@ void appendCommand(redisClient *c) {
 
 void strlenCommand(redisClient *c) {
     robj *o;
+    aclR1(c);
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
         checkType(c,o,REDIS_STRING)) return;
     addReplyLongLong(c,stringObjectLen(o));

@@ -1211,6 +1211,7 @@ void backgroundSaveDoneHandler(int exitcode, int bysignal) {
 }
 
 void saveCommand(redisClient *c) {
+    aclC(c);
     if (server.rdb_child_pid != -1) {
         addReplyError(c,"Background save already in progress");
         return;
@@ -1223,6 +1224,7 @@ void saveCommand(redisClient *c) {
 }
 
 void bgsaveCommand(redisClient *c) {
+    aclC(c);
     if (server.rdb_child_pid != -1) {
         addReplyError(c,"Background save already in progress");
     } else if (server.aof_child_pid != -1) {

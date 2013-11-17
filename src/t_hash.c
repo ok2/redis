@@ -467,6 +467,7 @@ void hashTypeConvert(robj *o, int enc) {
 void hsetCommand(redisClient *c) {
     int update;
     robj *o;
+    aclW1(c);
 
     if ((o = hashTypeLookupWriteOrCreate(c,c->argv[1])) == NULL) return;
     hashTypeTryConversion(o,c->argv,2,3);
@@ -480,6 +481,7 @@ void hsetCommand(redisClient *c) {
 
 void hsetnxCommand(redisClient *c) {
     robj *o;
+    aclW1(c);
     if ((o = hashTypeLookupWriteOrCreate(c,c->argv[1])) == NULL) return;
     hashTypeTryConversion(o,c->argv,2,3);
 
@@ -498,6 +500,7 @@ void hsetnxCommand(redisClient *c) {
 void hmsetCommand(redisClient *c) {
     int i;
     robj *o;
+    aclW1(c);
 
     if ((c->argc % 2) == 1) {
         addReplyError(c,"wrong number of arguments for HMSET");
@@ -519,6 +522,7 @@ void hmsetCommand(redisClient *c) {
 void hincrbyCommand(redisClient *c) {
     long long value, incr, oldvalue;
     robj *o, *current, *new;
+    aclW1(c);
 
     if (getLongLongFromObjectOrReply(c,c->argv[3],&incr,NULL) != REDIS_OK) return;
     if ((o = hashTypeLookupWriteOrCreate(c,c->argv[1])) == NULL) return;
@@ -553,6 +557,7 @@ void hincrbyCommand(redisClient *c) {
 void hincrbyfloatCommand(redisClient *c) {
     double long value, incr;
     robj *o, *current, *new, *aux;
+    aclW1(c);
 
     if (getLongDoubleFromObjectOrReply(c,c->argv[3],&incr,NULL) != REDIS_OK) return;
     if ((o = hashTypeLookupWriteOrCreate(c,c->argv[1])) == NULL) return;
@@ -627,6 +632,7 @@ static void addHashFieldToReply(redisClient *c, robj *o, robj *field) {
 
 void hgetCommand(redisClient *c) {
     robj *o;
+    aclR1(c);
 
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.nullbulk)) == NULL ||
         checkType(c,o,REDIS_HASH)) return;
@@ -637,6 +643,7 @@ void hgetCommand(redisClient *c) {
 void hmgetCommand(redisClient *c) {
     robj *o;
     int i;
+    aclR1(c);
 
     /* Don't abort when the key cannot be found. Non-existing keys are empty
      * hashes, where HMGET should respond with a series of null bulks. */
@@ -655,6 +662,7 @@ void hmgetCommand(redisClient *c) {
 void hdelCommand(redisClient *c) {
     robj *o;
     int j, deleted = 0, keyremoved = 0;
+    aclR1(c);
 
     if ((o = lookupKeyWriteOrReply(c,c->argv[1],shared.czero)) == NULL ||
         checkType(c,o,REDIS_HASH)) return;
@@ -682,6 +690,8 @@ void hdelCommand(redisClient *c) {
 
 void hlenCommand(redisClient *c) {
     robj *o;
+    aclR1(c);
+
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
         checkType(c,o,REDIS_HASH)) return;
 
@@ -717,6 +727,7 @@ void genericHgetallCommand(redisClient *c, int flags) {
     hashTypeIterator *hi;
     int multiplier = 0;
     int length, count = 0;
+    aclR1(c);
 
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.emptymultibulk)) == NULL
         || checkType(c,o,REDIS_HASH)) return;
@@ -757,6 +768,7 @@ void hgetallCommand(redisClient *c) {
 
 void hexistsCommand(redisClient *c) {
     robj *o;
+    aclR1(c);
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
         checkType(c,o,REDIS_HASH)) return;
 
@@ -766,6 +778,7 @@ void hexistsCommand(redisClient *c) {
 void hscanCommand(redisClient *c) {
     robj *o;
     unsigned long cursor;
+    aclR1(c);
 
     if (parseScanCursorOrReply(c,c->argv[2],&cursor) == REDIS_ERR) return;
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.emptyscan)) == NULL ||

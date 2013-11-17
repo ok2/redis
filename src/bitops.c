@@ -111,6 +111,7 @@ void setbitCommand(redisClient *c) {
     int byteval, bitval;
     long on;
 
+    aclW1(c);
     if (getBitOffsetFromArgument(c,c->argv[2],&bitoffset) != REDIS_OK)
         return;
 
@@ -166,6 +167,7 @@ void getbitCommand(redisClient *c) {
     size_t byte, bit;
     size_t bitval = 0;
 
+    aclR1(c);
     if (getBitOffsetFromArgument(c,c->argv[2],&bitoffset) != REDIS_OK)
         return;
 
@@ -218,6 +220,8 @@ void bitopCommand(redisClient *c) {
 
     /* Lookup keys, and store pointers to the string objects into an array. */
     numkeys = c->argc - 3;
+    for (j = 0; j < numkeys; j++)
+      aclWn(c, j+3);
     src = zmalloc(sizeof(unsigned char*) * numkeys);
     len = zmalloc(sizeof(long) * numkeys);
     objects = zmalloc(sizeof(robj*) * numkeys);
@@ -363,6 +367,7 @@ void bitcountCommand(redisClient *c) {
     long start, end, strlen;
     unsigned char *p;
     char llbuf[32];
+    aclR1(c);
 
     /* Lookup, check for type, and return 0 for non existing keys. */
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||

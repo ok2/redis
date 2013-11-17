@@ -30,6 +30,8 @@
 #include "redis.h"
 #include "slowlog.h"
 #include "bio.h"
+#include "acl.h"
+#include "sha1.h"
 
 #include <time.h>
 #include <signal.h>
@@ -116,6 +118,7 @@ struct redisCommand *commandTable;
 struct redisCommand redisCommandTable[] = {
     {"get",getCommand,2,"r",0,NULL,1,1,1,0,0},
     {"set",setCommand,-3,"wm",0,noPreloadGetKeys,1,1,1,0,0},
+    {"setsha",setshaCommand,-3,"wm",0,noPreloadGetKeys,1,1,1,0,0},
     {"setnx",setnxCommand,3,"wm",0,noPreloadGetKeys,1,1,1,0,0},
     {"setex",setexCommand,4,"wm",0,noPreloadGetKeys,1,1,1,0,0},
     {"psetex",psetexCommand,4,"wm",0,noPreloadGetKeys,1,1,1,0,0},
@@ -1193,6 +1196,8 @@ void createSharedObjects(void) {
     shared.emptyscan = createObject(REDIS_STRING,sdsnew("*2\r\n$1\r\n0\r\n*0\r\n"));
     shared.wrongtypeerr = createObject(REDIS_STRING,sdsnew(
         "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n"));
+    shared.notallowed = createObject(REDIS_STRING,sdsnew(
+        "-ERR not allowed\r\n"));
     shared.nokeyerr = createObject(REDIS_STRING,sdsnew(
         "-ERR no such key\r\n"));
     shared.syntaxerr = createObject(REDIS_STRING,sdsnew(
@@ -2118,9 +2123,55 @@ int time_independent_strcmp(char *a, char *b) {
     return diff; /* If zero strings are the same. */
 }
 
+static int __authCommand(redisClient *c) {
+  dictEntry *de = NULL;
+  sds key = NULL;
+  robj *userobj;
+  size_t passpos = 0;
+  char *pass = NULL;
+
+  c->authenticated = 0;
+  if (c->user != NULL)
+    sdsfree(c->user);
+  c->user = NULL;
+
+  for (pass = (char*)c->argv[1]->ptr;
+       *pass != ':' && *pass != '\0';
+       ++pass, ++passpos);
+  
+  if (*pass == ':') {
+    SHA1_CTX ctx;
+    unsigned char sha[20];
+    char shapass[41];
+    int i;
+
+    ++pass; shapass[40] = '\0';
+    SHA1Init(&ctx);
+    SHA1Update(&ctx, (unsigned char*) pass, strlen(pass));
+    SHA1Final(sha, &ctx);
+    for (i = 0; i < 20; ++i)
+      sprintf(&(shapass[i*2]), "%02x", sha[i]);
+    key = sdsnew("user:");
+    key = sdscatlen(key, c->argv[1]->ptr, passpos);
+    de = dictFind(c->db->dict, key);
+    if (de != NULL
+        && (userobj = (robj*)dictGetVal(de))->type == REDIS_STRING
+        && !time_independent_strcmp(shapass, (char*)userobj->ptr))
+      {
+        c->authenticated = 1;
+        c->user = sdsnewlen(c->argv[1]->ptr, passpos);
+        c->acl = aclFetch(c->acl, c->user, c->db->dict);
+        addReply(c,shared.ok);
+        return 1;
+      }
+  }
+  return 0;
+}
+
 void authCommand(redisClient *c) {
     if (!server.requirepass) {
         addReplyError(c,"Client sent AUTH, but no password is set");
+    } else if (__authCommand(c)) {
     } else if (!time_independent_strcmp(c->argv[1]->ptr, server.requirepass)) {
       c->authenticated = 1;
       addReply(c,shared.ok);
@@ -2568,6 +2619,7 @@ sds genRedisInfoString(char *section) {
 
 void infoCommand(redisClient *c) {
     char *section = c->argc == 2 ? c->argv[1]->ptr : "default";
+    aclC(c);
 
     if (c->argc > 2) {
         addReply(c,shared.syntaxerr);
@@ -2583,6 +2635,7 @@ void infoCommand(redisClient *c) {
 void monitorCommand(redisClient *c) {
     /* ignore MONITOR if already slave or in monitor mode */
     if (c->flags & REDIS_SLAVE) return;
+    aclC(c);
 
     c->flags |= (REDIS_SLAVE|REDIS_MONITOR);
     listAddNodeTail(server.monitors,c);

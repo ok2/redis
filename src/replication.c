@@ -411,6 +411,7 @@ need_full_resync:
 
 /* SYNC ad PSYNC command implemenation. */
 void syncCommand(redisClient *c) {
+    aclC(c);
     /* ignore SYNC if already slave or in monitor mode */
     if (c->flags & REDIS_SLAVE) return;
 
@@ -529,6 +530,7 @@ void syncCommand(redisClient *c) {
  * full resync. */
 void replconfCommand(redisClient *c) {
     int j;
+    aclC(c);
 
     if ((c->argc % 2) == 0) {
         /* Number of arguments must be odd to make sure that every
@@ -1206,6 +1208,7 @@ int cancelReplicationHandshake(void) {
 }
 
 void slaveofCommand(redisClient *c) {
+    aclC(c);
     if (!strcasecmp(c->argv[1]->ptr,"no") &&
         !strcasecmp(c->argv[2]->ptr,"one")) {
         if (server.masterhost) {

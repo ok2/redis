@@ -307,6 +307,8 @@ void touchWatchedKeysOnFlush(int dbid) {
 void watchCommand(redisClient *c) {
     int j;
 
+    for (j = 1; j < c->argc; j++)
+      aclRn(c, j);
     if (c->flags & REDIS_MULTI) {
         addReplyError(c,"WATCH inside MULTI is not allowed");
         return;

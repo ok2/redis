@@ -109,6 +109,12 @@ redisClient *createClient(int fd) {
     listSetMatchMethod(c->pubsub_patterns,listMatchObjects);
     if (fd != -1) listAddNodeTail(server.clients,c);
     initClientMultiState(c);
+
+    c->user = NULL;
+    if (server.requirepass)
+      c->acl = aclCreate();
+    else c->acl = NULL;
+
     return c;
 }
 
@@ -720,6 +726,9 @@ void freeClient(redisClient *c) {
         listDelNode(server.clients_to_close,ln);
     }
 
+    if (c->user != NULL) sdsfree(c->user);
+    if (c->acl != NULL) listRelease(c->acl);
+
     /* Release memory */
     if (c->name) decrRefCount(c->name);
     zfree(c->argv);
@@ -1261,6 +1270,7 @@ void clientCommand(redisClient *c) {
     listNode *ln;
     listIter li;
     redisClient *client;
+    aclC(c);
 
     if (!strcasecmp(c->argv[1]->ptr,"list") && c->argc == 2) {
         sds o = getAllClientsInfoString();

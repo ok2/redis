@@ -56,6 +56,7 @@
 #include "dict.h"    /* Hash tables */
 #include "adlist.h"  /* Linked lists */
 #include "zmalloc.h" /* total memory usage aware version of malloc/free */
+#include "acl.h"
 #include "anet.h"    /* Networking the easy way */
 #include "ziplist.h" /* Compact list data structure */
 #include "intset.h"  /* Compact integer set structure */
@@ -484,6 +485,10 @@ typedef struct redisClient {
     /* Response buffer */
     int bufpos;
     char buf[REDIS_REPLY_CHUNK_BYTES];
+
+    /* AUTH */
+    sds user;
+    list *acl;
 } redisClient;
 
 struct saveparam {
@@ -493,7 +498,7 @@ struct saveparam {
 
 struct sharedObjectsStruct {
     robj *crlf, *ok, *err, *emptybulk, *czero, *cone, *cnegone, *pong, *space,
-    *colon, *nullbulk, *nullmultibulk, *queued,
+      *colon, *nullbulk, *nullmultibulk, *queued, *notallowed,
     *emptymultibulk, *wrongtypeerr, *nokeyerr, *syntaxerr, *sameobjecterr,
     *outofrangeerr, *noscripterr, *loadingerr, *slowscripterr, *bgsaveerr,
     *masterdownerr, *roslaveerr, *execaborterr, *noautherr, *noreplicaserr,
@@ -1198,6 +1203,7 @@ void authCommand(redisClient *c);
 void pingCommand(redisClient *c);
 void echoCommand(redisClient *c);
 void setCommand(redisClient *c);
+void setshaCommand(redisClient *c);
 void setnxCommand(redisClient *c);
 void setexCommand(redisClient *c);
 void psetexCommand(redisClient *c);

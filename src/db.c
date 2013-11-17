@@ -207,6 +207,7 @@ void signalFlushedDb(int dbid) {
  *----------------------------------------------------------------------------*/
 
 void flushdbCommand(redisClient *c) {
+    aclC(c);
     server.dirty += dictSize(c->db->dict);
     signalFlushedDb(c->db->id);
     dictEmpty(c->db->dict);
@@ -215,6 +216,7 @@ void flushdbCommand(redisClient *c) {
 }
 
 void flushallCommand(redisClient *c) {
+    aclC(c);
     signalFlushedDb(-1);
     server.dirty += emptyDb();
     addReply(c,shared.ok);
@@ -235,6 +237,8 @@ void flushallCommand(redisClient *c) {
 void delCommand(redisClient *c) {
     int deleted = 0, j;
 
+    for (j = 1; j < c->argc; j++)
+      aclWn(c, j);
     for (j = 1; j < c->argc; j++) {
         if (dbDelete(c->db,c->argv[j])) {
             signalModifiedKey(c->db,c->argv[j]);
@@ -248,6 +252,7 @@ void delCommand(redisClient *c) {
 }
 
 void existsCommand(redisClient *c) {
+    aclL1(c);
     expireIfNeeded(c->db,c->argv[1]);
     if (dbExists(c->db,c->argv[1])) {
         addReply(c, shared.cone);
@@ -263,6 +268,12 @@ void selectCommand(redisClient *c) {
         "invalid DB index") != REDIS_OK)
         return;
 
+    if (c->user != NULL) {
+      sdsfree(c->user);
+      c->user = NULL;
+      c->authenticated = 0;
+    }
+
     if (selectDb(c,id) == REDIS_ERR) {
         addReplyError(c,"invalid DB index");
     } else {
@@ -273,9 +284,15 @@ void selectCommand(redisClient *c) {
 void randomkeyCommand(redisClient *c) {
     robj *key;
 
+retry:
     if ((key = dbRandomKey(c->db)) == NULL) {
         addReply(c,shared.nullbulk);
         return;
+    }
+    
+    if (!aclFn(c, key->ptr, 0, 0, 1)) {
+        decrRefCount(key);
+        goto retry;
     }
 
     addReplyBulk(c,key);
@@ -296,6 +313,8 @@ void keysCommand(redisClient *c) {
         sds key = dictGetKey(de);
         robj *keyobj;
 
+        if (!aclFn(c, key, 0, 0, 1))
+            continue;
         if (allkeys || stringmatchlen(pattern,plen,key,sdslen(key),0)) {
             keyobj = createStringObject(key,sdslen(key));
             if (expireIfNeeded(c->db,keyobj) == 0) {
@@ -486,6 +505,10 @@ void scanGenericCommand(redisClient *c, robj *o, unsigned long cursor) {
         nextnode = listNextNode(node);
         int filter = 0;
 
+        /* Filter element if it does not match ACL */
+        if (o == NULL && !aclFn(c, kobj->ptr, 0, 0, 1))
+          filter = 1;
+
         /* Filter element if it does not match the pattern. */
         if (!filter && use_pattern) {
             if (kobj->encoding == REDIS_ENCODING_INT) {
@@ -563,6 +586,7 @@ void typeCommand(redisClient *c) {
     robj *o;
     char *type;
 
+    aclR1(c);
     o = lookupKeyRead(c->db,c->argv[1]);
     if (o == NULL) {
         type = "none";
@@ -582,6 +606,7 @@ void typeCommand(redisClient *c) {
 void shutdownCommand(redisClient *c) {
     int flags = 0;
 
+    aclC(c);
     if (c->argc > 2) {
         addReply(c,shared.syntaxerr);
         return;
@@ -608,6 +633,8 @@ void shutdownCommand(redisClient *c) {
 void renameGenericCommand(redisClient *c, int nx) {
     robj *o;
     long long expire;
+    aclRW1(c);
+    aclWn(c, 2);
 
     /* To use the same key as src and dst is probably an error */
     if (sdscmp(c->argv[1]->ptr,c->argv[2]->ptr) == 0) {
@@ -655,6 +682,7 @@ void moveCommand(redisClient *c) {
     robj *o;
     redisDb *src, *dst;
     int srcid;
+    aclC(c);
 
     /* Obtain source and target DB pointers */
     src = c->db;
@@ -798,6 +826,7 @@ int expireIfNeeded(redisDb *db, robj *key) {
 void expireGenericCommand(redisClient *c, long long basetime, int unit) {
     robj *key = c->argv[1], *param = c->argv[2];
     long long when; /* unix time in milliseconds when the key will expire. */
+    aclW1(c);
 
     if (getLongLongFromObjectOrReply(c, param, &when, NULL) != REDIS_OK)
         return;
@@ -859,6 +888,7 @@ void pexpireatCommand(redisClient *c) {
 
 void ttlGenericCommand(redisClient *c, int output_ms) {
     long long expire, ttl = -1;
+    aclR1(c);
 
     /* If the key does not exist at all, return -2 */
     if (lookupKeyRead(c->db,c->argv[1]) == NULL) {
@@ -889,6 +919,7 @@ void pttlCommand(redisClient *c) {
 
 void persistCommand(redisClient *c) {
     dictEntry *de;
+    aclW1(c);
 
     de = dictFind(c->db->dict,c->argv[1]->ptr);
     if (de == NULL) {

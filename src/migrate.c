@@ -65,6 +65,7 @@ int verifyDumpPayload(unsigned char *p, size_t len) {
 void dumpCommand(redisClient *c) {
     robj *o, *dumpobj;
     rio payload;
+    aclC(c);
 
     /* Check if the key is here. */
     if ((o = lookupKeyRead(c->db,c->argv[1])) == NULL) {
@@ -88,6 +89,7 @@ void restoreCommand(redisClient *c) {
     rio payload;
     int type;
     robj *obj;
+    aclC(c);
 
     /* Make sure this key does not already exist here... */
     if (lookupKeyWrite(c->db,c->argv[1]) != NULL) {
@@ -133,6 +135,7 @@ void migrateCommand(redisClient *c) {
     long long ttl = 0, expireat;
     robj *o;
     rio cmd, payload;
+    aclC(c);
 
     /* Sanity check */
     if (getLongFromObjectOrReply(c,c->argv[5],&timeout,NULL) != REDIS_OK)

@@ -847,6 +847,7 @@ void zaddGenericCommand(redisClient *c, int incr) {
     double score = 0, *scores = NULL, curscore = 0.0;
     int j, elements = (c->argc-2)/2;
     int added = 0, updated = 0;
+    aclW1(c);
 
     if (c->argc % 2) {
         addReply(c,shared.syntaxerr);
@@ -985,6 +986,7 @@ void zremCommand(redisClient *c) {
     robj *key = c->argv[1];
     robj *zobj;
     int deleted = 0, keyremoved = 0, j;
+    aclW1(c);
 
     if ((zobj = lookupKeyWriteOrReply(c,key,shared.czero)) == NULL ||
         checkType(c,zobj,REDIS_ZSET)) return;
@@ -1045,6 +1047,7 @@ void zremrangebyscoreCommand(redisClient *c) {
     zrangespec range;
     int keyremoved = 0;
     unsigned long deleted;
+    aclW1(c);
 
     /* Parse the range arguments. */
     if (zslParseRange(c->argv[2],c->argv[3],&range) != REDIS_OK) {
@@ -1091,6 +1094,7 @@ void zremrangebyrankCommand(redisClient *c) {
     int llen;
     unsigned long deleted;
     int keyremoved = 0;
+    aclW1(c);
 
     if ((getLongFromObjectOrReply(c, c->argv[2], &start, NULL) != REDIS_OK) ||
         (getLongFromObjectOrReply(c, c->argv[3], &end, NULL) != REDIS_OK)) return;
@@ -1505,6 +1509,7 @@ void zunionInterGenericCommand(redisClient *c, robj *dstkey, int op) {
     zset *dstzset;
     zskiplistNode *znode;
     int touched = 0;
+    aclW1(c);
 
     /* expect setnum input keys to be given */
     if ((getLongFromObjectOrReply(c, c->argv[2], &setnum, NULL) != REDIS_OK))
@@ -1521,6 +1526,9 @@ void zunionInterGenericCommand(redisClient *c, robj *dstkey, int op) {
         addReply(c,shared.syntaxerr);
         return;
     }
+
+    for (i = 0, j = 3; i < setnum; i++, j++)
+      aclRn(c, j);
 
     /* read keys to be used for input */
     src = zcalloc(sizeof(zsetopsrc) * setnum);
@@ -1722,6 +1730,7 @@ void zrangeGenericCommand(redisClient *c, int reverse) {
     long end;
     int llen;
     int rangelen;
+    aclR1(c);
 
     if ((getLongFromObjectOrReply(c, c->argv[2], &start, NULL) != REDIS_OK) ||
         (getLongFromObjectOrReply(c, c->argv[3], &end, NULL) != REDIS_OK)) return;
@@ -1834,6 +1843,7 @@ void genericZrangebyscoreCommand(redisClient *c, int reverse) {
     unsigned long rangelen = 0;
     void *replylen = NULL;
     int minidx, maxidx;
+    aclR1(c);
 
     /* Parse the range arguments. */
     if (reverse) {
@@ -2024,6 +2034,7 @@ void zcountCommand(redisClient *c) {
     robj *zobj;
     zrangespec range;
     int count = 0;
+    aclR1(c);
 
     /* Parse the range arguments */
     if (zslParseRange(c->argv[2],c->argv[3],&range) != REDIS_OK) {
@@ -2099,6 +2110,7 @@ void zcountCommand(redisClient *c) {
 void zcardCommand(redisClient *c) {
     robj *key = c->argv[1];
     robj *zobj;
+    aclR1(c);
 
     if ((zobj = lookupKeyReadOrReply(c,key,shared.czero)) == NULL ||
         checkType(c,zobj,REDIS_ZSET)) return;
@@ -2110,6 +2122,7 @@ void zscoreCommand(redisClient *c) {
     robj *key = c->argv[1];
     robj *zobj;
     double score;
+    aclR1(c);
 
     if ((zobj = lookupKeyReadOrReply(c,key,shared.nullbulk)) == NULL ||
         checkType(c,zobj,REDIS_ZSET)) return;
@@ -2142,6 +2155,7 @@ void zrankGenericCommand(redisClient *c, int reverse) {
     robj *zobj;
     unsigned long llen;
     unsigned long rank;
+    aclR1(c);
 
     if ((zobj = lookupKeyReadOrReply(c,key,shared.nullbulk)) == NULL ||
         checkType(c,zobj,REDIS_ZSET)) return;
@@ -2208,6 +2222,7 @@ void zrevrankCommand(redisClient *c) {
 void zscanCommand(redisClient *c) {
     robj *o;
     unsigned long cursor;
+    aclR1(c);
 
     if (parseScanCursorOrReply(c,c->argv[2],&cursor) == REDIS_ERR) return;
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.emptyscan)) == NULL ||

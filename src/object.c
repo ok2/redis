@@ -607,6 +607,7 @@ robj *objectCommandLookupOrReply(redisClient *c, robj *key, robj *reply) {
  * Usage: OBJECT <verb> ... arguments ... */
 void objectCommand(redisClient *c) {
     robj *o;
+    aclC(c);
 
     if (!strcasecmp(c->argv[1]->ptr,"refcount") && c->argc == 3) {
         if ((o = objectCommandLookupOrReply(c,c->argv[2],shared.nullbulk))

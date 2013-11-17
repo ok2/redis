@@ -250,6 +250,7 @@ void setTypeConvert(robj *setobj, int enc) {
 void saddCommand(redisClient *c) {
     robj *set;
     int j, added = 0;
+    aclW1(c);
 
     set = lookupKeyWrite(c->db,c->argv[1]);
     if (set == NULL) {
@@ -277,6 +278,7 @@ void saddCommand(redisClient *c) {
 void sremCommand(redisClient *c) {
     robj *set;
     int j, deleted = 0, keyremoved = 0;
+    aclW1(c);
 
     if ((set = lookupKeyWriteOrReply(c,c->argv[1],shared.czero)) == NULL ||
         checkType(c,set,REDIS_SET)) return;
@@ -304,6 +306,9 @@ void sremCommand(redisClient *c) {
 
 void smoveCommand(redisClient *c) {
     robj *srcset, *dstset, *ele;
+    aclRW1(c);
+    aclWn(c, 2);
+
     srcset = lookupKeyWrite(c->db,c->argv[1]);
     dstset = lookupKeyWrite(c->db,c->argv[2]);
     ele = c->argv[3] = tryObjectEncoding(c->argv[3]);
@@ -357,6 +362,7 @@ void smoveCommand(redisClient *c) {
 
 void sismemberCommand(redisClient *c) {
     robj *set;
+    aclR1(c);
 
     if ((set = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
         checkType(c,set,REDIS_SET)) return;
@@ -370,6 +376,7 @@ void sismemberCommand(redisClient *c) {
 
 void scardCommand(redisClient *c) {
     robj *o;
+    aclR1(c);
 
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.czero)) == NULL ||
         checkType(c,o,REDIS_SET)) return;
@@ -381,6 +388,7 @@ void spopCommand(redisClient *c) {
     robj *set, *ele, *aux;
     int64_t llele;
     int encoding;
+    aclRW1(c);
 
     if ((set = lookupKeyWriteOrReply(c,c->argv[1],shared.nullbulk)) == NULL ||
         checkType(c,set,REDIS_SET)) return;
@@ -560,6 +568,7 @@ void srandmemberCommand(redisClient *c) {
     robj *set, *ele;
     int64_t llele;
     int encoding;
+    aclR1(c);
 
     if (c->argc == 3) {
         srandmemberWithCountCommand(c);
@@ -600,6 +609,14 @@ void sinterGenericCommand(redisClient *c, robj **setkeys, unsigned long setnum, 
     void *replylen = NULL;
     unsigned long j, cardinality = 0;
     int encoding;
+
+    if (c->user != NULL) {
+      if (dstkey != NULL && aclFn(c, dstkey->ptr, 0, 1, 0))
+        aclRet(c);
+      for (j = 0; j < setnum; j++)
+        if (aclFn(c, setkeys[j]->ptr, 1, 0, 0))
+          aclRet(c);
+    }
 
     for (j = 0; j < setnum; j++) {
         robj *setobj = dstkey ?
@@ -745,6 +762,14 @@ void sunionDiffGenericCommand(redisClient *c, robj **setkeys, int setnum, robj *
     robj *ele, *dstset = NULL;
     int j, cardinality = 0;
     int diff_algo = 1;
+
+    if (c->user != NULL) {
+      if (dstkey != NULL && aclFn(c, dstkey->ptr, 0, 1, 0))
+        aclRet(c);
+      for (j = 0; j < setnum; j++)
+        if (aclFn(c, setkeys[j]->ptr, 1, 0, 0))
+          aclRet(c);
+    }
 
     for (j = 0; j < setnum; j++) {
         robj *setobj = dstkey ?
@@ -915,6 +940,7 @@ void sdiffstoreCommand(redisClient *c) {
 void sscanCommand(redisClient *c) {
     robj *set;
     unsigned long cursor;
+    aclR1(c);
 
     if (parseScanCursorOrReply(c,c->argv[2],&cursor) == REDIS_ERR) return;
     if ((set = lookupKeyReadOrReply(c,c->argv[1],shared.emptyscan)) == NULL ||

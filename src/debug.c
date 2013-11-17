@@ -247,6 +247,7 @@ void computeDatasetDigest(unsigned char *final) {
 }
 
 void debugCommand(redisClient *c) {
+    aclC(c);
     if (!strcasecmp(c->argv[1]->ptr,"segfault")) {
         *((char*)-1) = 'x';
     } else if (!strcasecmp(c->argv[1]->ptr,"oom")) {

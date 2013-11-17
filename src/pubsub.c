@@ -28,6 +28,7 @@
  */
 
 #include "redis.h"
+#include "acl.h"
 
 /*-----------------------------------------------------------------------------
  * Pubsub low level API
@@ -233,6 +234,8 @@ int pubsubPublishMessage(robj *channel, robj *message) {
         while ((ln = listNext(&li)) != NULL) {
             redisClient *c = ln->value;
 
+            if (!aclFn(c, channel->ptr, 1, 0, 0))
+                continue;
             addReply(c,shared.mbulkhdr[3]);
             addReply(c,shared.messagebulk);
             addReplyBulk(c,channel);
@@ -251,6 +254,8 @@ int pubsubPublishMessage(robj *channel, robj *message) {
                                 sdslen(pat->pattern->ptr),
                                 (char*)channel->ptr,
                                 sdslen(channel->ptr),0)) {
+                if (!aclFn(pat->client, channel->ptr, 1, 0, 0))
+                    continue;
                 addReply(pat->client,shared.mbulkhdr[4]);
                 addReply(pat->client,shared.pmessagebulk);
                 addReplyBulk(pat->client,pat->pattern);
@@ -305,6 +310,7 @@ void punsubscribeCommand(redisClient *c) {
 }
 
 void publishCommand(redisClient *c) {
+    aclW1(c);
     int receivers = pubsubPublishMessage(c->argv[1],c->argv[2]);
     forceCommandPropagation(c,REDIS_PROPAGATE_REPL);
     addReplyLongLong(c,receivers);
