@@ -498,7 +498,8 @@ struct saveparam {
 
 struct sharedObjectsStruct {
     robj *crlf, *ok, *err, *emptybulk, *czero, *cone, *cnegone, *pong, *space,
-      *colon, *nullbulk, *nullmultibulk, *queued, *notallowed,
+    *colon, *nullbulk, *nullmultibulk, *queued,
+    *notallowed,
     *emptymultibulk, *wrongtypeerr, *nokeyerr, *syntaxerr, *sameobjecterr,
     *outofrangeerr, *noscripterr, *loadingerr, *slowscripterr, *bgsaveerr,
     *masterdownerr, *roslaveerr, *execaborterr, *noautherr, *noreplicaserr,
