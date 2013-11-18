@@ -1,0 +1,102 @@
+* Multiuser system for Redis 2.8
+
+  This branch implements a multiuser system for Redis. It works about
+  two types of keys:
+
+  1. User keys with prefix "user:"
+
+     This key is definition of a user and as value it should contain
+     the SHA1 of his password.
+
+  2. ACL keys with prefix "acl:"
+
+     This keys define the access rights of specific users to specific keys.
+
+* Users
+
+  To create a user key, you can use the new "setsha" command, which is
+  equivalent ta "set" command, with the exception, that the value will
+  be the SHA1 checksum of given value. For example:
+  #+begin_src sh
+    127.0.0.1:6379> setsha user:u1 mypwd
+    OK
+    127.0.0.1:6379> get user:u1
+    "f9e059f0e929ee032abfec9bc2a07365f54f659e"
+    127.0.0.1:6379> 
+  #+end_src
+
+  After that, it is possible to login like follows:
+  #+begin_src sh
+    127.0.0.1:6379> auth u1:mypwd
+    OK
+  #+end_src
+
+  The argument to "AUTH" command can also be the password from
+  "requiredpass" configuration, than you will login as "root" or
+  "master". This user has no right limitations and redis work with it
+  exactly like before.
+
+* ACL entries
+
+  The ACL entries are keys with "acl:" prefix and has such form:
+  #+begin_src sh
+    acl:<name>:<prio>:<right>:<user>
+  #+end_src
+  
+  1. <name> - simple name, without special meaning
+  2. <prio> - priority of the entry, from 0 upwards, 0 is lowest
+  3. <right> - a tripple like "rwl":
+     - "r": value of that key is readable
+     - "w": value of that key is writable
+     - "l": the key appears in key lists (f.e. with KEYS)
+  4. <user> - user pattern, the same pattern format like in KEYS command
+
+  The value of ACL entries are the key patterns, to which the ACL
+  apply.
+
+  To allow all users to read the "acl:" keys but no user the "user:"
+  keys, you can set following ACL entries:
+  #+begin_src sh
+    127.0.0.1:6379> set acl:readacl:1000:r-l:* acl:*
+    OK
+    127.0.0.1:6379> set acl:nousers:1000:---:* user:*
+    OK
+  #+end_src
+
+  Now with the master login you will see:
+  #+begin_src sh
+    127.0.0.1:6379> keys *
+    1) "acl:nousers:1000:---:*"
+    2) "user:u1"
+    3) "acl:readacl:1000:r-l:*"
+  #+end_src
+
+  But if you login as "u1" you wont be able to see the user:* keys and
+  acls are not writable.
+
+  #+begin_src sh
+    127.0.0.1:6379> auth u1:mypwd
+    OK
+    127.0.0.1:6379> keys *
+    1) "acl:nousers:1000:---:*"
+    2) "acl:readacl:1000:r-l:*"
+    127.0.0.1:6379> get user:u1
+    (error) ERR not allowed
+    127.0.0.1:6379> get acl:readacl:1000:r-l:*
+    "acl:*"
+    127.0.0.1:6379> set acl:readacl:1000:r-l:* xxx:*
+    (error) ERR not allowed
+  #+end_src
+
+* Specials
+
+  - The ACL list is readen only on user login, it means that after a
+    AUTH command, the changes on ACL's are not active until the user
+    relogins.
+
+  - PUB/SUB channels are handled as regular keys, it means that the
+    user need to have read rights to receive messages from subscribed
+    channels and write rights to publish messages on the keys with the
+    given channel names.
+
+  - LUA Scripts can be used only by master (for now).
